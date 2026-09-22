@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "public": true,
+  "cleanUrls": true,
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/src/main/resources/static/$1"
+    }
+  ]
+}
