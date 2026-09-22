@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Job Processing System - Command Center</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-body: #090d16;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --card-hover-border: rgba(56, 189, 248, 0.4);
+            --accent-cyan: #38bdf8;
+            --accent-green: #34d399;
+            --accent-amber: #fbbf24;
+            --accent-rose: #f43f5e;
+            --accent-purple: #c084fc;
+            --accent-indigo: #818cf8;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.08) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(192, 132, 252, 0.08) 0px, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(52, 211, 153, 0.05) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: #f1f5f9;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            padding-bottom: 3rem;
+        }
+
+        /* Glassmorphism Navbar */
+        .navbar-custom {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--card-border);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        /* Glassmorphism Cards */
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-card:hover {
+            border-color: var(--card-hover-border);
+        }
+
+        .card-header-glass {
+            background: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--card-border);
+            padding: 1rem 1.25rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        /* Metric Widgets */
+        .metric-card {
+            padding: 1.25rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+
+        .metric-card.cyan::before { background-color: var(--accent-cyan); box-shadow: 0 0 12px var(--accent-cyan); }
+        .metric-card.amber::before { background-color: var(--accent-amber); box-shadow: 0 0 12px var(--accent-amber); }
+        .metric-card.green::before { background-color: var(--accent-green); box-shadow: 0 0 12px var(--accent-green); }
+        .metric-card.rose::before { background-color: var(--accent-rose); box-shadow: 0 0 12px var(--accent-rose); }
+
+        .metric-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .icon-cyan { background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan); }
+        .icon-amber { background: rgba(251, 191, 36, 0.15); color: var(--accent-amber); }
+        .icon-green { background: rgba(52, 211, 153, 0.15); color: var(--accent-green); }
+        .icon-rose { background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); }
+
+        /* Custom Form Controls */
+        .form-control, .form-select {
+            background-color: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--card-border);
+            color: #f8fafc;
+            border-radius: 10px;
+            padding: 0.6rem 0.9rem;
+        }
+
+        .form-control:focus, .form-select:focus {
+            background-color: rgba(15, 23, 42, 0.9);
+            border-color: var(--accent-cyan);
+            color: #f8fafc;
+            box-shadow: 0 0 0 0.25rem rgba(56, 189, 248, 0.2);
+        }
+
+        /* Custom Badges */
+        .badge-priority-high { background: rgba(244, 63, 94, 0.2); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.4); }
+        .badge-priority-medium { background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.4); }
+        .badge-priority-low { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
+
+        .status-running { background: rgba(192, 132, 252, 0.2); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.4); }
+        .status-queued { background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.4); }
+        .status-completed { background: rgba(52, 211, 153, 0.2); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.4); }
+        .status-failed { background: rgba(244, 63, 94, 0.2); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.4); }
+        .status-retrying { background: rgba(251, 146, 60, 0.2); color: #fb923c; border: 1px solid rgba(251, 146, 60, 0.4); }
+        .status-cancelled { background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.4); }
+
+        /* Table Styling */
+        .table-custom {
+            --bs-table-bg: transparent;
+            --bs-table-color: #cbd5e1;
+            --bs-table-border-color: var(--card-border);
+        }
+
+        .table-custom tbody tr {
+            transition: background-color 0.15s;
+        }
+
+        .table-custom tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+
+        /* Pulse Indicator */
+        .pulse-dot {
+            height: 10px;
+            width: 10px;
+            background-color: var(--accent-green);
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 10px var(--accent-green);
+            animation: pulse-ring 2s infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+        }
+
+        /* Buttons with Gradient Glow */
+        .btn-gradient-cyan {
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            border: none;
+            color: #ffffff;
+            font-weight: 600;
+            border-radius: 10px;
+            transition: all 0.2s;
+        }
+
+        .btn-gradient-cyan:hover {
+            background: linear-gradient(135deg, #0369a1, #0284c7);
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+            color: #ffffff;
+        }
+
+        .preset-btn {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--card-border);
+            color: #cbd5e1;
+            border-radius: 10px;
+            padding: 0.65rem 1rem;
+            text-align: left;
+            transition: all 0.2s;
+        }
+
+        .preset-btn:hover {
+            border-color: var(--accent-cyan);
+            color: #ffffff;
+            background: rgba(56, 189, 248, 0.1);
+        }
+
+        /* Toast Popup */
+        .toast-container-custom {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 2000;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom py-3 mb-4">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand d-flex align-items-center gap-2 font-monospace fw-bold fs-5" href="#">
+                <i class="bi bi-cpu-fill text-info fs-3"></i>
+                <span>Distributed Job Processor <span class="badge bg-info bg-opacity-20 text-info font-monospace ms-2 fs-6">v1.0</span></span>
+            </a>
+            
+            <div class="d-flex align-items-center gap-3">
+                <div class="d-flex align-items-center gap-2 bg-dark bg-opacity-50 px-3 py-1.5 rounded-3 border border-secondary border-opacity-25">
+                    <i class="bi bi-key-fill text-warning"></i>
+                    <span class="text-secondary small">API Key:</span>
+                    <select id="apiKeySelect" class="form-select form-select-sm border-0 bg-transparent text-light shadow-none" style="width: 155px; cursor: pointer;">
+                        <option value="admin-key-123" class="bg-dark">admin-key-123</option>
+                        <option value="user-key-456" class="bg-dark">user-key-456</option>
+                        <option value="invalid-key" class="bg-dark">invalid-key (Test Auth Fail)</option>
+                    </select>
+                </div>
+
+                <div class="d-flex align-items-center gap-2 bg-dark bg-opacity-50 px-3 py-1.5 rounded-3 border border-secondary border-opacity-25">
+                    <span class="pulse-dot"></span>
+                    <span class="text-secondary small">Node:</span>
+                    <strong id="nodeId" class="text-light font-monospace small">worker-node-1</strong>
+                </div>
+
+                <div class="form-check form-switch m-0 ms-2">
+                    <input class="form-check-input" type="checkbox" id="autoRefreshToggle" checked>
+                    <label class="form-check-label text-secondary small" for="autoRefreshToggle">Live Telemetry (1s)</label>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Container -->
+    <div class="container-fluid px-4">
+        
+        <!-- Metrics Top Row -->
+        <div class="row g-3 mb-4">
+            <div class="col-xl-3 col-md-6">
+                <div class="glass-card metric-card cyan">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="text-secondary small fw-medium">Active Worker Pool</span>
+                            <div class="fs-2 fw-bold text-light mt-1" id="workerThreads">0 / 0</div>
+                        </div>
+                        <div class="metric-icon icon-cyan">
+                            <i class="bi bi-gear-wide-connected"></i>
+                        </div>
+                    </div>
+                    <div class="progress mt-3" style="height: 6px; background-color: rgba(15, 23, 42, 0.8);">
+                        <div id="workerProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-info" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="glass-card metric-card amber">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="text-secondary small fw-medium">Priority Queue Depth</span>
+                            <div class="fs-2 fw-bold text-amber mt-1" id="queueSize">0</div>
+                        </div>
+                        <div class="metric-icon icon-amber">
+                            <i class="bi bi-list-task"></i>
+                        </div>
+                    </div>
+                    <span class="text-secondary small mt-2 d-block">Jobs waiting in ZSET queue</span>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="glass-card metric-card green">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="text-secondary small fw-medium">Completed Workloads</span>
+                            <div class="fs-2 fw-bold text-green mt-1" id="completedJobs">0</div>
+                        </div>
+                        <div class="metric-icon icon-green">
+                            <i class="bi bi-check-circle-fill"></i>
+                        </div>
+                    </div>
+                    <span class="text-secondary small mt-2 d-block">Successfully executed</span>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="glass-card metric-card rose">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="text-secondary small fw-medium">Retries / Permanent Failures</span>
+                            <div class="fs-2 fw-bold text-rose mt-1">
+                                <span id="retryingJobs">0</span> <span class="text-secondary fs-4">/</span> <span id="failedJobs">0</span>
+                            </div>
+                        </div>
+                        <div class="metric-icon icon-rose">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                        </div>
+                    </div>
+                    <span class="text-secondary small mt-2 d-block">Exponential backoff & faults</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            
+            <!-- Left Column: Submit Job & Presets -->
+            <div class="col-xl-4 col-lg-5">
+                
+                <!-- Submit Form Card -->
+                <div class="glass-card mb-4">
+                    <div class="card-header-glass d-flex align-items-center justify-content-between">
+                        <span class="d-flex align-items-center gap-2">
+                            <i class="bi bi-plus-circle-fill text-info"></i> Submit Workload Task
+                        </span>
+                        <span class="badge bg-secondary bg-opacity-20 text-secondary font-monospace" style="font-size:0.7rem;">REST API</span>
+                    </div>
+                    <div class="card-body p-4">
+                        <form id="submitJobForm">
+                            <div class="mb-3">
+                                <label class="form-label text-secondary small fw-medium">Job Identifier / Name</label>
+                                <input type="text" class="form-control" id="jobName" placeholder="e.g. LLM Inference Batch #42" required>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label text-secondary small fw-medium">Workload Type</label>
+                                    <select class="form-select" id="jobType">
+                                        <option value="AI_INFERENCE">AI_INFERENCE (LLM Matrix)</option>
+                                        <option value="IMAGE_TRANSFORMATION">IMAGE_TRANSFORMATION (Resizing)</option>
+                                        <option value="REPORT_GENERATION">REPORT_GENERATION (PDF Compilation)</option>
+                                        <option value="CALCULATION">CALCULATION (CPU Fibonacci)</option>
+                                        <option value="DATA_PROCESSING">DATA_PROCESSING (I/O Bound)</option>
+                                        <option value="SIMULATION">SIMULATION (Compute Task)</option>
+                                        <option value="FAIL_SIMULATION">FAIL_SIMULATION (Test Retries)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-secondary small fw-medium">Priority Ranking</label>
+                                    <select class="form-select" id="priority">
+                                        <option value="HIGH">HIGH (Rank 300)</option>
+                                        <option value="MEDIUM" selected>MEDIUM (Rank 200)</option>
+                                        <option value="LOW">LOW (Rank 100)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label text-secondary small fw-medium">Payload / Computational Params</label>
+                                <input type="text" class="form-control" id="payload" placeholder="e.g. 1024 tokens or 4K RAW image">
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label text-secondary small fw-medium d-flex justify-content-between">
+                                    <span>Webhook Callback URL (Optional)</span>
+                                    <span class="text-info style-italic" style="font-size: 0.75rem;">HTTP POST on finish</span>
+                                </label>
+                                <input type="url" class="form-control" id="webhookUrl" placeholder="https://httpbin.org/post">
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label text-secondary small fw-medium">Max Retry Attempts</label>
+                                <input type="number" class="form-control" id="maxRetries" value="3" min="0" max="10">
+                            </div>
+
+                            <button type="submit" class="btn btn-gradient-cyan w-100 py-2.5">
+                                <i class="bi bi-send-fill me-2"></i> Submit Job to Priority Queue
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Presets Card -->
+                <div class="glass-card mb-4">
+                    <div class="card-header-glass d-flex align-items-center gap-2">
+                        <i class="bi bi-lightning-charge-fill text-warning"></i> Preset Workload Generators
+                    </div>
+                    <div class="card-body p-3 d-flex flex-column gap-2">
+                        <button class="preset-btn d-flex align-items-center justify-content-between" onclick="submitBatch('AI')">
+                            <div>
+                                <div class="fw-semibold text-light"><i class="bi bi-cpu text-info me-2"></i>Submit 5 AI Inference Workloads</div>
+                                <div class="text-secondary small">Matrix multiplication & token evaluation</div>
+                            </div>
+                            <i class="bi bi-chevron-right text-secondary"></i>
+                        </button>
+
+                        <button class="preset-btn d-flex align-items-center justify-content-between" onclick="submitBatch('HIGH')">
+                            <div>
+                                <div class="fw-semibold text-light"><i class="bi bi-rocket-takeoff-fill text-rose me-2"></i>Submit 10 High Priority Jobs</div>
+                                <div class="text-secondary small">Rank 300 - Jump ahead in queue</div>
+                            </div>
+                            <i class="bi bi-chevron-right text-secondary"></i>
+                        </button>
+
+                        <button class="preset-btn d-flex align-items-center justify-content-between" onclick="submitBatch('FAULT')">
+                            <div>
+                                <div class="fw-semibold text-light"><i class="bi bi-bug-fill text-amber me-2"></i>Trigger Fault Simulation</div>
+                                <div class="text-secondary small">Test exponential retries (2s -> 4s -> 8s)</div>
+                            </div>
+                            <i class="bi bi-chevron-right text-secondary"></i>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Charts & Job Table -->
+            <div class="col-xl-8 col-lg-7">
+                
+                <!-- Dual Telemetry Charts -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-8">
+                        <div class="glass-card p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-semibold small d-flex align-items-center gap-2 text-secondary">
+                                    <i class="bi bi-graph-up-arrow text-info"></i> System Throughput Timeline
+                                </span>
+                                <span class="badge bg-secondary bg-opacity-20 text-secondary font-monospace" style="font-size:0.65rem;">Chart.js</span>
+                            </div>
+                            <div style="height: 180px;">
+                                <canvas id="throughputChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="glass-card p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-semibold small d-flex align-items-center gap-2 text-secondary">
+                                    <i class="bi bi-pie-chart-fill text-purple"></i> Status Ratio
+                                </span>
+                            </div>
+                            <div style="height: 180px;">
+                                <canvas id="statusChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Job History & Live Queue Table -->
+                <div class="glass-card">
+                    <div class="card-header-glass d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-table text-info"></i>
+                            <span>Persistent Job Queue & Audit Logs</span>
+                        </div>
+
+                        <!-- Filter Controls -->
+                        <div class="d-flex align-items-center gap-2">
+                            <select id="statusFilter" class="form-select form-select-sm" style="width: 140px;" onchange="fetchJobs()">
+                                <option value="">All Statuses</option>
+                                <option value="QUEUED">QUEUED</option>
+                                <option value="RUNNING">RUNNING</option>
+                                <option value="COMPLETED">COMPLETED</option>
+                                <option value="FAILED">FAILED</option>
+                                <option value="RETRYING">RETRYING</option>
+                                <option value="CANCELLED">CANCELLED</option>
+                            </select>
+
+                            <button class="btn btn-sm btn-outline-secondary rounded-3" onclick="fetchJobs()">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-custom table-hover align-middle mb-0">
+                                <thead>
+                                    <tr class="text-secondary small border-bottom border-secondary border-opacity-25">
+                                        <th class="ps-3 py-3">ID / Workload Name</th>
+                                        <th>Type</th>
+                                        <th>Priority</th>
+                                        <th>Status</th>
+                                        <th>Retries</th>
+                                        <th>Worker Node</th>
+                                        <th>Execution Details</th>
+                                        <th class="pe-3 text-end">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="jobsTableBody">
+                                    <tr>
+                                        <td colspan="8" class="text-center text-secondary py-5">Loading queue records...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container-custom">
+        <div id="actionToast" class="toast align-items-center text-bg-info border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body font-monospace" id="toastMessage">
+                    Action executed successfully.
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        const API_BASE = '/api/v1';
+
+        // 1. Throughput Chart Setup
+        const throughputCtx = document.getElementById('throughputChart').getContext('2d');
+        const throughputData = {
+            labels: [],
+            datasets: [
+                { label: 'Completed', data: [], borderColor: '#34d399', backgroundColor: 'rgba(52, 211, 153, 0.1)', tension: 0.3, fill: true },
+                { label: 'Queue Depth', data: [], borderColor: '#fbbf24', tension: 0.3, fill: false },
+                { label: 'Active Workers', data: [], borderColor: '#38bdf8', tension: 0.3, fill: false }
+            ]
+        };
+        const throughputChart = new Chart(throughputCtx, {
+            type: 'line',
+            data: throughputData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+                },
+                plugins: { legend: { labels: { color: '#cbd5e1', boxWidth: 12, font: { size: 11 } } } }
+            }
+        });
+
+        // 2. Status Breakdown Doughnut Chart
+        const statusCtx = document.getElementById('statusChart').getContext('2d');
+        const statusChart = new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Completed', 'Queued', 'Running', 'Failed', 'Retrying'],
+                datasets: [{
+                    data: [0, 0, 0, 0, 0],
+                    backgroundColor: ['#34d399', '#fbbf24', '#c084fc', '#f43f5e', '#fb923c'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                cutout: '70%'
+            }
+        });
+
+        function getApiKey() {
+            return document.getElementById('apiKeySelect').value;
+        }
+
+        function showToast(msg) {
+            document.getElementById('toastMessage').innerText = msg;
+            const toastEl = document.getElementById('actionToast');
+            const toast = new bootstrap.Toast(toastEl);
+            toast.show();
+        }
+
+        document.getElementById('submitJobForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const jobData = {
+                name: document.getElementById('jobName').value || 'Job-' + Math.random().toString(36).substring(7),
+                jobType: document.getElementById('jobType').value,
+                priority: document.getElementById('priority').value,
+                payload: document.getElementById('payload').value,
+                webhookUrl: document.getElementById('webhookUrl').value,
+                maxRetries: parseInt(document.getElementById('maxRetries').value)
+            };
+
+            const res = await fetch(`${API_BASE}/jobs`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-API-KEY': getApiKey()
+                },
+                body: JSON.stringify(jobData)
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                alert(`API Security Error (${res.status}): ${err.message || err.error}`);
+                return;
+            }
+
+            showToast(`Submitted Job '${jobData.name}' to Priority Queue!`);
+            document.getElementById('jobName').value = '';
+            document.getElementById('payload').value = '';
+            document.getElementById('webhookUrl').value = '';
+            fetchMetrics();
+            fetchJobs();
+        });
+
+        async function fetchMetrics() {
+            try {
+                const res = await fetch(`${API_BASE}/metrics`);
+                const data = await res.json();
+
+                document.getElementById('nodeId').innerText = data.workerNodeId || 'local-1';
+                document.getElementById('workerThreads').innerText = `${data.activeWorkerCount} / ${data.poolSize}`;
+                document.getElementById('queueSize').innerText = data.queueSize;
+
+                const pct = data.poolSize > 0 ? (data.activeWorkerCount / data.poolSize) * 100 : 0;
+                document.getElementById('workerProgress').style.width = `${pct}%`;
+
+                const counts = data.jobCountsByStatus || {};
+                const completed = counts['COMPLETED'] || 0;
+                const queued = counts['QUEUED'] || 0;
+                const running = counts['RUNNING'] || 0;
+                const failed = counts['FAILED'] || 0;
+                const retrying = counts['RETRYING'] || 0;
+
+                document.getElementById('completedJobs').innerText = completed;
+                document.getElementById('retryingJobs').innerText = retrying;
+                document.getElementById('failedJobs').innerText = failed;
+
+                // Update Doughnut Chart
+                statusChart.data.datasets[0].data = [completed, queued, running, failed, retrying];
+                statusChart.update();
+
+                // Update Throughput Timeline
+                const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                if (throughputData.labels.length > 12) {
+                    throughputData.labels.shift();
+                    throughputData.datasets[0].data.shift();
+                    throughputData.datasets[1].data.shift();
+                    throughputData.datasets[2].data.shift();
+                }
+                throughputData.labels.push(now);
+                throughputData.datasets[0].data.push(completed);
+                throughputData.datasets[1].data.push(data.queueSize);
+                throughputData.datasets[2].data.push(data.activeWorkerCount);
+                throughputChart.update();
+
+            } catch (err) {
+                console.error("Failed fetching metrics", err);
+            }
+        }
+
+        async function fetchJobs() {
+            try {
+                const statusFilter = document.getElementById('statusFilter').value;
+                let url = `${API_BASE}/jobs`;
+                if (statusFilter) url += `?status=${statusFilter}`;
+
+                const res = await fetch(url, {
+                    headers: { 'X-API-KEY': getApiKey() }
+                });
+
+                const tbody = document.getElementById('jobsTableBody');
+
+                if (!res.ok) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4"><i class="bi bi-shield-x fs-4 me-2"></i><strong>Authentication Failed (HTTP ${res.status})</strong><br><span class="small text-secondary">Invalid X-API-KEY header! Select a valid key in top navbar.</span></td></tr>`;
+                    return;
+                }
+
+                const jobs = await res.json();
+
+                if (jobs.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-secondary py-5">No job records found. Submit a job or select a preset on the left!</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = jobs.map(job => `
+                    <tr>
+                        <td class="ps-3 py-3">
+                            <div class="fw-bold text-light">${escapeHtml(job.name)}</div>
+                            <div class="font-monospace text-secondary" style="font-size: 0.72rem;">${job.id}</div>
+                            ${job.webhookUrl ? `<div class="text-info mt-0.5" style="font-size: 0.68rem;"><i class="bi bi-bell-fill me-1"></i>Webhook Callback Configured</div>` : ''}
+                        </td>
+                        <td><span class="badge bg-dark border border-secondary text-secondary font-monospace" style="font-size:0.72rem;">${job.jobType}</span></td>
+                        <td><span class="badge badge-priority-${job.priority.toLowerCase()}">${job.priority}</span></td>
+                        <td><span class="badge status-${job.status.toLowerCase()}">${job.status}</span></td>
+                        <td><span class="text-secondary small font-monospace">${job.retryCount}/${job.maxRetries}</span></td>
+                        <td><span class="font-monospace text-secondary small">${job.workerId ? job.workerId.substring(12) : '-'}</span></td>
+                        <td style="max-width: 240px;">
+                            ${job.result ? `<div class="text-success small text-truncate fw-medium" title="${escapeHtml(job.result)}">${escapeHtml(job.result)}</div>` : ''}
+                            ${job.errorMessage ? `<div class="text-danger small text-truncate" title="${escapeHtml(job.errorMessage)}">${escapeHtml(job.errorMessage)}</div>` : ''}
+                            ${job.executionTimeMs ? `<div class="text-secondary text-end font-monospace" style="font-size: 0.68rem;">(${job.executionTimeMs}ms)</div>` : ''}
+                        </td>
+                        <td class="pe-3 text-end">
+                            ${(job.status === 'QUEUED' || job.status === 'PENDING') ? 
+                                `<button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="cancelJob('${job.id}')" title="Cancel Job"><i class="bi bi-x-lg"></i></button>` : '-'}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error("Failed fetching jobs", err);
+            }
+        }
+
+        async function cancelJob(jobId) {
+            const res = await fetch(`${API_BASE}/jobs/${jobId}/cancel`, {
+                method: 'POST',
+                headers: { 'X-API-KEY': getApiKey() }
+            });
+            if (res.ok) {
+                showToast(`Job ${jobId.substring(0, 8)}... was cancelled.`);
+                fetchJobs();
+                fetchMetrics();
+            }
+        }
+
+        async function submitBatch(type) {
+            let requests = [];
+            if (type === 'AI') {
+                for (let i = 1; i <= 5; i++) {
+                    requests.push({ name: `LLM-Inference-Layer-${i}`, jobType: 'AI_INFERENCE', priority: 'HIGH', payload: '1024 tokens', maxRetries: 3 });
+                }
+            } else if (type === 'HIGH') {
+                for (let i = 1; i <= 10; i++) {
+                    requests.push({ name: `High-Priority-Calc-${i}`, jobType: 'CALCULATION', priority: 'HIGH', payload: '36', maxRetries: 3 });
+                }
+            } else if (type === 'FAULT') {
+                for (let i = 1; i <= 4; i++) {
+                    requests.push({ name: `Fault-Test-${i}`, jobType: 'FAIL_SIMULATION', priority: 'HIGH', payload: 'fault', maxRetries: 3 });
+                }
+            }
+
+            showToast(`Submitting ${requests.length} batch jobs to cluster...`);
+
+            for (const req of requests) {
+                await fetch(`${API_BASE}/jobs`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-API-KEY': getApiKey()
+                    },
+                    body: JSON.stringify(req)
+                });
+            }
+
+            fetchMetrics();
+            fetchJobs();
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        document.getElementById('apiKeySelect').addEventListener('change', () => {
+            fetchJobs();
+        });
+
+        setInterval(() => {
+            if (document.getElementById('autoRefreshToggle').checked) {
+                fetchMetrics();
+                fetchJobs();
+            }
+        }, 1000);
+
+        fetchMetrics();
+        fetchJobs();
+    </script>
+</body>
+</html>
